@@ -8,7 +8,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -38,6 +38,7 @@ model Site {
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   departments Department[]
   shifts      Shift[]
+  templates   ShiftTemplate[]
 
   @@index([companyId])
 }
@@ -52,6 +53,7 @@ model Department {
   site      Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
   employees Employee[]
   shifts    Shift[]
+  templates ShiftTemplate[]
 
   @@index([companyId])
 }
@@ -156,18 +158,22 @@ model TimeOff {
 }
 
 model ShiftTemplate {
-  id         String   @id @default(cuid())
-  companyId  String
-  positionId String?
-  name       String
-  startMin   Int
-  endMin     Int
-  breakMin   Int      @default(0)
-  headcount  Int      @default(1)
-  daysOfWeek String   @default("1,2,3,4,5")
+  id           String   @id @default(cuid())
+  companyId    String
+  positionId   String?
+  departmentId String?
+  siteId       String?
+  name         String
+  startMin     Int
+  endMin       Int
+  breakMin     Int      @default(0)
+  headcount    Int      @default(1)
+  daysOfWeek   String   @default("1,2,3,4,5")
 
-  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  position   Position? @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  company      Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  position     Position?   @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  site         Site?       @relation(fields: [siteId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
 }

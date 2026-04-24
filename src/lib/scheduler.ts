@@ -196,8 +196,12 @@ export function buildSlotsFromTemplates(
   while (cursor <= endDate) {
     const dow = cursor.getDay();
     for (const t of templates) {
-      const days = t.daysOfWeek.split(",").map((x) => Number(x.trim()));
-      if (!days.includes(dow)) continue;
+      const days = t.daysOfWeek
+        .split(",")
+        .map((x) => Number(x.trim()))
+        .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
+      if (days.length === 0 || !days.includes(dow)) continue;
+      if (t.endMin <= t.startMin) continue; // garde-fou : template invalide
       for (let i = 0; i < t.headcount; i++) {
         const start = new Date(cursor.getTime() + t.startMin * MIN_MS);
         const end = new Date(cursor.getTime() + t.endMin * MIN_MS);

@@ -19,7 +19,8 @@ export default async function PlanningPage({
     );
   }
 
-  const periodStart = start ? new Date(start) : startOfWeek(new Date());
+  const raw = start ? new Date(start) : new Date();
+  const periodStart = startOfWeek(isNaN(raw.getTime()) ? new Date() : raw, 1);
   periodStart.setHours(0, 0, 0, 0);
   const periodEnd = addDays(periodStart, 7);
   periodEnd.setMilliseconds(-1);

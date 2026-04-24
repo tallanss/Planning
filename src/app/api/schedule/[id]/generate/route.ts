@@ -8,8 +8,7 @@ export async function POST(
 ) {
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
-  const keepLocked: boolean = body.keepLocked ?? true;
-  const clearExisting: boolean = body.clearExisting ?? true;
+  const clearUnlocked: boolean = body.clearUnlocked ?? true;
 
   const schedule = await prisma.schedule.findUnique({
     where: { id },
@@ -28,6 +27,13 @@ export async function POST(
     include: { position: { include: { requiredSkills: true } } },
   });
 
+  if (templates.length === 0) {
+    return NextResponse.json(
+      { ok: false, error: "NO_TEMPLATES", message: "Aucun modèle de shift défini" },
+      { status: 400 },
+    );
+  }
+
   const employees = await prisma.employee.findMany({
     where: { companyId, active: true },
     include: {
@@ -37,13 +43,19 @@ export async function POST(
     },
   });
 
-  // Pré-supprime les shifts non verrouillés
-  if (clearExisting) {
-    await prisma.shift.deleteMany({
-      where: { scheduleId: schedule.id, ...(keepLocked ? { locked: false } : {}) },
-    });
+  if (employees.length === 0) {
+    return NextResponse.json(
+      { ok: false, error: "NO_EMPLOYEES", message: "Aucun employé actif" },
+      { status: 400 },
+    );
   }
 
+  // On ne supprime JAMAIS les shifts verrouillés. Manager en garde le contrôle.
+  if (clearUnlocked) {
+    await prisma.shift.deleteMany({ where: { scheduleId: schedule.id, locked: false } });
+  }
+
+  // Récupère les shifts restants (verrouillés + ceux encore présents) pour les traiter comme contraintes
   const existingShifts = await prisma.shift.findMany({ where: { scheduleId: schedule.id } });
 
   const slots = buildSlotsFromTemplates(
@@ -56,8 +68,8 @@ export async function POST(
       headcount: t.headcount,
       daysOfWeek: t.daysOfWeek,
       requiredSkillIds: t.position?.requiredSkills.map((rs) => rs.skillId) ?? [],
-      departmentId: null,
-      siteId: null,
+      departmentId: t.departmentId,
+      siteId: t.siteId,
     })),
     schedule.startDate,
     schedule.endDate,
@@ -85,19 +97,22 @@ export async function POST(
     maxConsecDays: rules.maxConsecDays,
   });
 
-  // Persiste les shifts générés
+  // Map slot -> template id pour récupérer department/site au moment de la persistance
+  const tplById = new Map(templates.map((t) => [t.id, t]));
+
   const shiftsToCreate = result.assignments
     .map((a) => {
       const slot = slots.find((s) => s.id === a.slotId);
       if (!slot) return null;
+      // slot.id = `${template.id}_{date}_{index}` — on extrait le templateId (cuid, sans underscore)
       const tplId = slot.id.split("_")[0];
-      const tpl = templates.find((t) => t.id === tplId);
+      const tpl = tplById.get(tplId);
       return {
         scheduleId: schedule.id,
         employeeId: a.employeeId,
         positionId: slot.positionId,
-        departmentId: null,
-        siteId: tpl?.position?.companyId ? null : null,
+        departmentId: tpl?.departmentId ?? null,
+        siteId: tpl?.siteId ?? null,
         start: slot.start,
         end: slot.end,
         breakMin: slot.breakMin,

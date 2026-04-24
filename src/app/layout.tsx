@@ -35,6 +35,7 @@ export default function RootLayout({
               <NavLink href="/positions">Postes</NavLink>
               <NavLink href="/templates">Modèles</NavLink>
               <NavLink href="/settings">Réglages</NavLink>
+              <LogoutButton />
             </nav>
           </div>
         </header>
@@ -52,5 +53,19 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
     >
       {children}
     </Link>
+  );
+}
+
+function LogoutButton() {
+  return (
+    <form action="/api/auth/logout" method="POST" className="inline">
+      <button
+        type="submit"
+        className="rounded-md px-3 py-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 transition-colors"
+        title="Se déconnecter"
+      >
+        Quitter
+      </button>
+    </form>
   );
 }

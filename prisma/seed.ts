@@ -229,6 +229,8 @@ async function main() {
       data: {
         companyId: company.id,
         positionId: t.position.id,
+        departmentId: t.department.id,
+        siteId: t.department.siteId,
         name: t.name,
         startMin: t.start,
         endMin: t.end,
