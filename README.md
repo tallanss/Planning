@@ -3,15 +3,28 @@
 Web app de génération automatique de plannings pour entreprises : beaucoup de salariés,
 contraintes légales (repos, amplitude, pauses), compétences, disponibilités, congés.
 
+## Base de données — Supabase
+
+1. Créer un projet sur [supabase.com](https://supabase.com) (free tier, région EU)
+2. **Settings → Database → Connection pooling → "Transaction"** : copier l'URL → `DATABASE_URL`
+3. **Settings → Database → Connection string → "URI"** : copier l'URL (port 5432) → `DIRECT_URL`
+
+Prisma a besoin des **deux URLs** : le pooler PgBouncer (`DATABASE_URL`, port 6543) pour
+le runtime sert les requêtes app, la connexion directe (`DIRECT_URL`, port 5432) pour
+les migrations (PgBouncer ne les supporte pas).
+
+Format des URLs :
+```
+DATABASE_URL=postgresql://postgres.<ref>:<pwd>@aws-0-<region>.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1
+DIRECT_URL=postgresql://postgres.<ref>:<pwd>@aws-0-<region>.pooler.supabase.com:5432/postgres
+```
+
 ## Dev local
 
 ```bash
-# 1. Base PostgreSQL (option rapide : https://neon.tech, free tier)
-# Copiez l'URL de connexion dans .env
 cp .env.example .env
-# puis éditez DATABASE_URL
+# éditer DATABASE_URL + DIRECT_URL avec les URLs Supabase
 
-# 2. Install + setup
 pnpm install
 pnpm exec prisma migrate dev --name init
 pnpm db:seed             # entreprise démo : 80 employés, 2 sites, 5 postes
@@ -22,35 +35,28 @@ Pour **désactiver l'auth en dev**, laissez `APP_PASSWORD` vide.
 
 ## Déploiement Vercel
 
-Planify est prêt pour Vercel. Étapes :
-
-1. **Provisionner une base PostgreSQL** (5 min)
-   - [Neon](https://neon.tech) — recommandé, free tier, région EU
-   - ou Vercel Postgres / Supabase / Railway / RDS
-   - Récupérer l'URL : `postgresql://user:pwd@host/db?sslmode=require`
-
-2. **Importer le projet sur Vercel**
+1. **Importer le projet**
    ```bash
-   # depuis la racine du repo
    npx vercel              # lier à votre compte, choisir le repo
    ```
-   Ou via l'UI : [vercel.com/new](https://vercel.com/new) → importer depuis GitHub.
+   Ou via [vercel.com/new](https://vercel.com/new).
 
-3. **Configurer les variables d'env** (Project Settings → Environment Variables)
-   - `DATABASE_URL` → l'URL Postgres de l'étape 1
-   - `APP_PASSWORD` → un mot de passe partagé fort (≥ 16 caractères)
+2. **Configurer les 3 variables d'env** (Project Settings → Environment Variables)
+   - `DATABASE_URL` → URL pooler Supabase (port 6543, `?pgbouncer=true&connection_limit=1`)
+   - `DIRECT_URL` → URL directe Supabase (port 5432)
+   - `APP_PASSWORD` → mot de passe partagé fort (≥ 16 caractères)
 
-4. **Déployer**
+3. **Déployer**
    ```bash
    npx vercel --prod
    ```
-   Le build exécute automatiquement `prisma migrate deploy` pour créer les tables.
+   Le build exécute automatiquement `prisma migrate deploy` (via `DIRECT_URL`)
+   pour créer les tables.
 
-5. **Initialiser les données** (une seule fois, depuis votre machine avec le même DATABASE_URL)
+4. **Initialiser les données** (une seule fois, depuis votre machine)
    ```bash
-   DATABASE_URL="postgresql://..." pnpm db:seed
+   DATABASE_URL="..." DIRECT_URL="..." pnpm db:seed
    ```
-   Ou créez votre propre entreprise via une page d'onboarding (à ajouter).
 
 L'app est accessible sur `https://<votre-projet>.vercel.app` — mot de passe demandé à l'entrée.
 
