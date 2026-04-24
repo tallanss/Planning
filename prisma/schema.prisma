@@ -1,0 +1,229 @@
+// Schéma de base de données — Générateur de planning employés
+// Multi-tenant (Company), pensé pour grosse entreprise : sites, départements,
+// compétences, règles légales, disponibilités, absences, templates, shifts.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  timezone    String   @default("Europe/Paris")
+  country     String   @default("FR")
+  weekStart   Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  sites       Site[]
+  departments Department[]
+  positions   Position[]
+  skills      Skill[]
+  employees   Employee[]
+  templates   ShiftTemplate[]
+  schedules   Schedule[]
+  rules       LaborRule[]
+}
+
+model Site {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  address     String?
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  departments Department[]
+  shifts      Shift[]
+
+  @@index([companyId])
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  companyId String
+  siteId    String?
+  name      String
+  color     String   @default("#6366f1")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site      Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  employees Employee[]
+  shifts    Shift[]
+
+  @@index([companyId])
+}
+
+model Position {
+  id             String   @id @default(cuid())
+  companyId      String
+  name           String
+  color          String   @default("#0ea5e9")
+  hourlyRate     Float    @default(0)
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requiredSkills PositionSkill[]
+  templates      ShiftTemplate[]
+  shifts         Shift[]
+
+  @@index([companyId])
+}
+
+model Skill {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees EmployeeSkill[]
+  positions PositionSkill[]
+
+  @@index([companyId])
+}
+
+model PositionSkill {
+  positionId String
+  skillId    String
+  position   Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  skill      Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([positionId, skillId])
+}
+
+model Employee {
+  id             String   @id @default(cuid())
+  companyId      String
+  departmentId   String?
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  color          String   @default("#64748b")
+
+  contractType   String   @default("CDI")
+  weeklyHours    Float    @default(35)
+  hourlyRate     Float    @default(0)
+  startDate      DateTime @default(now())
+  endDate        DateTime?
+
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  department     Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  skills         EmployeeSkill[]
+  availabilities Availability[]
+  timeOffs       TimeOff[]
+  shifts         Shift[]
+
+  @@index([companyId])
+  @@index([departmentId])
+}
+
+model EmployeeSkill {
+  employeeId String
+  skillId    String
+  level      Int      @default(1)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  skill      Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, skillId])
+}
+
+model Availability {
+  id         String   @id @default(cuid())
+  employeeId String
+  dayOfWeek  Int
+  startMin   Int
+  endMin     Int
+  available  Boolean  @default(true)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+}
+
+model TimeOff {
+  id         String   @id @default(cuid())
+  employeeId String
+  startDate  DateTime
+  endDate    DateTime
+  kind       String   @default("CONGE")
+  status     String   @default("APPROVED")
+  note       String?
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+}
+
+model ShiftTemplate {
+  id         String   @id @default(cuid())
+  companyId  String
+  positionId String?
+  name       String
+  startMin   Int
+  endMin     Int
+  breakMin   Int      @default(0)
+  headcount  Int      @default(1)
+  daysOfWeek String   @default("1,2,3,4,5")
+
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  position   Position? @relation(fields: [positionId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+}
+
+model Schedule {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  startDate   DateTime
+  endDate     DateTime
+  status      String   @default("DRAFT")
+  createdAt   DateTime @default(now())
+  publishedAt DateTime?
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shifts      Shift[]
+
+  @@index([companyId])
+}
+
+model Shift {
+  id           String   @id @default(cuid())
+  scheduleId   String
+  employeeId   String?
+  positionId   String?
+  departmentId String?
+  siteId       String?
+  start        DateTime
+  end          DateTime
+  breakMin     Int      @default(0)
+  note         String?
+  locked       Boolean  @default(false)
+
+  schedule     Schedule    @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  employee     Employee?   @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  position     Position?   @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  site         Site?       @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
+  @@index([scheduleId])
+  @@index([employeeId])
+  @@index([start])
+}
+
+model LaborRule {
+  id             String  @id @default(cuid())
+  companyId      String  @unique
+  minDailyRestH  Float   @default(11)
+  minWeeklyRestH Float   @default(35)
+  maxDailyH      Float   @default(10)
+  maxWeeklyH     Float   @default(48)
+  maxAvgWeeklyH  Float   @default(44)
+  breakAfterH    Float   @default(6)
+  breakMin       Int     @default(20)
+  maxAmplitudeH  Float   @default(13)
+  maxConsecDays  Int     @default(6)
+
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
